@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: airline-booking
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    # --include=dev is required: Render sets NODE_ENV=production during the build step, which
+    # makes plain `npm install` skip devDependencies (vite, typescript) — but the build step
+    # needs them to run tsc/vite build.
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # set manually in the Render dashboard — never commit a real value
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      # BETTER_AUTH_URL intentionally omitted — server/auth.ts falls back to Render's
+      # auto-provided RENDER_EXTERNAL_URL.
