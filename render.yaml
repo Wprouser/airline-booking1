@@ -23,3 +23,5 @@ services:
       # auto-provided RENDER_EXTERNAL_URL.
       - key: AERODATABOX_RAPIDAPI_KEY
         sync: false # optional — set manually in the Render dashboard; unset means simulated-flight fallback
+      - key: AVIATIONSTACK_API_KEY
+        sync: false # optional — set manually in the Render dashboard; unset disables live status/lookup features only

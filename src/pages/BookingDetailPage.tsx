@@ -8,6 +8,7 @@ import { buildETicketHtml, buildInvoiceHtml, downloadHtml } from "../utils/docum
 import { TRAVEL_CLASS_LABELS, type BookingDetail } from "../types";
 import { Card, CardTitle } from "../components/ui/Card";
 import { FareBreakdownDetails } from "../components/FareBreakdownDetails";
+import { LiveFlightStatus } from "../components/LiveFlightStatus";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Alert } from "../components/ui/Alert";
@@ -102,6 +103,7 @@ export function BookingDetailPage() {
                 </div>
               </details>
             )}
+            <LiveFlightStatus flightId={leg.flightId} />
           </div>
         ))}
       </Card>

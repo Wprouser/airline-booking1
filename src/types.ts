@@ -14,6 +14,24 @@ export interface Airport {
   country: string;
 }
 
+export interface FlightStatusResult {
+  status: string;
+  airlineName: string | null;
+  flightIata: string | null;
+  departureAirportName: string | null;
+  departureScheduled: string | null;
+  departureEstimated: string | null;
+  departureDelayMinutes: number | null;
+  departureTerminal: string | null;
+  departureGate: string | null;
+  arrivalAirportName: string | null;
+  arrivalScheduled: string | null;
+  arrivalEstimated: string | null;
+  arrivalDelayMinutes: number | null;
+}
+
+export type LiveStatusResponse = { available: true; status: FlightStatusResult } | { available: false; reason: string };
+
 export interface FareBreakdown {
   currency: string;
   taxLabel: string;

@@ -2,6 +2,8 @@ import { Router } from "express";
 import { pool, HttpError } from "../db/pool.js";
 import { ensureFlightsForRoute } from "../lib/flightSync.js";
 import { applyPromoToBreakdown, findGroupPromotion, type FareBreakdown, type GroupPromotion } from "../lib/farePricing.js";
+import { getFlightStatus, type FlightStatusResult } from "../lib/aviationstack.js";
+import { AVIATIONSTACK_API_KEY } from "../config.js";
 
 export const flightsRouter = Router();
 
@@ -193,3 +195,57 @@ flightsRouter.get("/:id/seatmap", async (req, res) => {
     seats: rows.map((r) => ({ seatNumber: r.seat_number, isBooked: r.is_booked })),
   });
 });
+
+// AviationStack's free plan is capped at 100 requests/month total, so every result is cached
+// in-memory for a while — a "Check Live Status" button clicked a few times by the same user (or
+// several users checking the same popular flight) must not spend quota more than once per window.
+const LIVE_STATUS_CACHE_TTL_MS = 5 * 60 * 1000;
+const liveStatusCache = new Map<string, { fetchedAt: number; result: FlightStatusResult | null }>();
+
+flightsRouter.get("/:id/live-status", async (req, res) => {
+  if (!AVIATIONSTACK_API_KEY) {
+    res.json({ available: false, reason: "AviationStack is not configured on this server." });
+    return;
+  }
+
+  // departure_date_local::text (not the bare column) — pg's default DATE parser reconstructs a JS
+  // Date from local(server-timezone) components, and re-deriving the string via toISOString() then
+  // rolls it back a day whenever the server's local timezone is ahead of UTC. Casting to text in SQL
+  // gets Postgres's own YYYY-MM-DD string directly, sidestepping that reinterpretation entirely (the
+  // same class of bug the departure_date_local column itself was added to fix — see schema.sql).
+  const { rows } = await pool.query(
+    "SELECT flight_number, departure_date_local::text AS departure_date_local FROM flights WHERE id = $1",
+    [req.params.id],
+  );
+  const flight = rows[0];
+  if (!flight) throw new HttpError(404, "Flight not found");
+
+  const dateKey: string = flight.departure_date_local;
+  const cacheKey = `${flight.flight_number}|${dateKey}`;
+  const cached = liveStatusCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < LIVE_STATUS_CACHE_TTL_MS) {
+    console.log(`[flights/live-status] ${cacheKey}: cache hit`);
+    res.json(cached.result ? { available: true, status: cached.result } : noStatusAvailable());
+    return;
+  }
+
+  try {
+    const status = await getFlightStatus(AVIATIONSTACK_API_KEY, flight.flight_number, dateKey);
+    liveStatusCache.set(cacheKey, { fetchedAt: Date.now(), result: status });
+    res.json(status ? { available: true, status } : noStatusAvailable());
+  } catch (err) {
+    console.error(`[flights/live-status] ${cacheKey}: AviationStack lookup failed:`, err);
+    res.json({
+      available: false,
+      reason: "Live status is temporarily unavailable — please try again shortly.",
+    });
+  }
+});
+
+function noStatusAvailable() {
+  return {
+    available: false,
+    reason:
+      "No live status yet — AviationStack only tracks flights close to their departure time, not future-dated bookings.",
+  };
+}
