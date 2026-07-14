@@ -5,6 +5,39 @@ import { Button } from "./ui/Button";
 import { FareBreakdownDetails } from "./FareBreakdownDetails";
 import { cn } from "../lib/cn";
 
+// No real airline-logo assets or free logo API exist for arbitrary IATA codes — a deterministic
+// colored initial badge stands in for one instead of fabricating real branding.
+const BADGE_COLORS = [
+  "bg-brand-600",
+  "bg-emerald-600",
+  "bg-amber-600",
+  "bg-rose-600",
+  "bg-violet-600",
+  "bg-cyan-600",
+  "bg-orange-600",
+  "bg-teal-600",
+];
+
+function badgeColor(code: string): string {
+  let hash = 0;
+  for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) >>> 0;
+  return BADGE_COLORS[hash % BADGE_COLORS.length];
+}
+
+function AirlineBadge({ code }: { code: string }) {
+  return (
+    <span
+      className={cn(
+        "grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold text-white",
+        badgeColor(code),
+      )}
+      aria-hidden="true"
+    >
+      {code.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
 export function FlightCard({
   flight,
   onSelect,
@@ -24,28 +57,33 @@ export function FlightCard({
       )}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-            <PlaneTakeoff className="h-4 w-4 text-brand-500" aria-hidden="true" />
-            {flight.airlineName}
-            <span className="text-xs font-normal text-slate-400 dark:text-slate-500">{flight.flightNumber}</span>
-          </div>
-          <div className="mt-2 flex items-center gap-3 text-slate-700 dark:text-slate-200">
-            <div className="text-lg font-bold tabular-nums">{formatTime(flight.departureTime)}</div>
-            <div className="flex flex-1 flex-col items-center px-2 text-xs text-slate-400 dark:text-slate-500">
-              <div>{formatDuration(flight.durationMinutes)}</div>
-              <div className="relative h-px w-full min-w-[3rem] bg-slate-300 dark:bg-slate-700">
-                <span className="absolute right-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-slate-300 dark:bg-slate-700" />
-              </div>
-              <div>{stopsLabel(flight.stops)}</div>
+        <div className="flex flex-1 items-start gap-3">
+          <AirlineBadge code={flight.airlineCode} />
+          <div className="flex-1">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+              {flight.airlineName}
+              <span className="text-xs font-normal text-slate-400 dark:text-slate-500">{flight.flightNumber}</span>
             </div>
-            <div className="text-lg font-bold tabular-nums">{formatTime(flight.arrivalTime)}</div>
-          </div>
-          <div className="mt-2 flex justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>
-              {flight.originCode} → {flight.destinationCode}
-            </span>
-            <span>{flight.aircraft}</span>
+            <div className="mt-2 flex items-center gap-3 text-slate-700 dark:text-slate-200">
+              <div className="text-left">
+                <div className="text-lg font-bold tabular-nums">{formatTime(flight.departureTime)}</div>
+                <div className="text-[11px] font-medium text-slate-400 dark:text-slate-500">{flight.originCode}</div>
+              </div>
+              <div className="flex flex-1 flex-col items-center px-2 text-xs text-slate-400 dark:text-slate-500">
+                <div>{formatDuration(flight.durationMinutes)}</div>
+                <div className="relative flex h-px w-full min-w-[3rem] items-center bg-slate-300 dark:bg-slate-700">
+                  <span className="absolute left-0 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-slate-300 dark:bg-slate-700" />
+                  <PlaneTakeoff className="mx-auto h-3 w-3 rotate-90 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+                  <span className="absolute right-0 h-1.5 w-1.5 translate-x-1/2 rounded-full bg-slate-300 dark:bg-slate-700" />
+                </div>
+                <div>{stopsLabel(flight.stops)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-bold tabular-nums">{formatTime(flight.arrivalTime)}</div>
+                <div className="text-[11px] font-medium text-slate-400 dark:text-slate-500">{flight.destinationCode}</div>
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{flight.aircraft}</div>
           </div>
         </div>
         <div className="flex flex-row items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800 sm:w-40 sm:flex-col sm:items-end sm:border-0 sm:pt-0">
@@ -57,7 +95,7 @@ export function FlightCard({
           </div>
           <Button onClick={onSelect} className="w-full">
             {selected && <CheckCircle2 className="h-4 w-4" />}
-            {selected ? "Selected" : "Select"}
+            {selected ? "Selected" : "Book Now"}
           </Button>
         </div>
       </div>

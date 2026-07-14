@@ -7,6 +7,13 @@
 // space), `airline: {name, iata, icao}`, and `aircraft.model`. `arrival.airport.iata` and
 // `number` are always present; `airline.iata` and `arrival.scheduledTime.utc` are occasionally
 // missing (~1-3% of entries) — those are skipped rather than guessed at.
+//
+// IMPORTANT — this response has no fare/price field at all (confirmed against a live response;
+// see AeroDataBoxDeparture below, which is the complete shape we read from). AeroDataBox is a
+// schedule/status API, not a fare API — no plan or endpoint it offers returns pricing. This is
+// why fares are computed locally by server/lib/farePricing.ts rather than read from here; see
+// that file's header comment for the full explanation of why those computed fares won't match a
+// real OTA like MakeMyTrip.
 
 const API_HOST = "aerodatabox.p.rapidapi.com";
 const API_BASE = `https://${API_HOST}`;
@@ -52,6 +59,9 @@ async function fetchDepartureWindow(
     `${API_BASE}/flights/airports/iata/${originCode}/${fromLocal}/${toLocal}` +
     `?direction=Departure&withLeg=true&withCancelled=false&withCodeshared=false&withCargo=false&withPrivate=false&withLocation=false`;
 
+  // Logged without the key/host headers (credentials) — the URL itself has no secrets in it.
+  console.log(`[aerodatabox] API request: GET ${url}`);
+
   const res = await fetch(url, {
     headers: {
       "X-RapidAPI-Key": apiKey,
@@ -59,6 +69,7 @@ async function fetchDepartureWindow(
     },
     signal: AbortSignal.timeout(15_000),
   });
+  console.log(`[aerodatabox] API response: HTTP ${res.status} for window ${fromLocal}/${toLocal}`);
   if (!res.ok) {
     throw new Error(`AeroDataBox request failed: ${res.status} ${res.statusText}`);
   }

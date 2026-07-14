@@ -59,6 +59,22 @@ function toFlightResult(row: Record<string, unknown>, promo: GroupPromotion | nu
   };
 }
 
+// "Final Displayed Fare" logging — what actually goes out over the wire to the client, after the
+// cached Layer 1 breakdown (calculateFare, logged in farePricing.ts) and the live Layer 2
+// passenger-count discount (applyPromoToBreakdown) have both been applied.
+function logFinalFares(label: string, flights: unknown[]): void {
+  const prices = flights.map((f) => (f as { fare: { price: number; currency: string } }).fare);
+  if (prices.length === 0) {
+    console.log(`[flights/search] ${label}: final displayed fares — no results`);
+    return;
+  }
+  const amounts = prices.map((p) => p.price);
+  console.log(
+    `[flights/search] ${label}: final displayed fares — ${prices.length} result(s), ` +
+      `${prices[0].currency} ${Math.min(...amounts)}–${Math.max(...amounts)}`,
+  );
+}
+
 flightsRouter.get("/search", async (req, res) => {
   const { origin, destination, departureDate, returnDate, passengers, travelClass } = req.query;
 
@@ -105,6 +121,7 @@ flightsRouter.get("/search", async (req, res) => {
   const result: { outbound: unknown[]; return?: unknown[] } = {
     outbound: outboundRows.map((row) => toFlightResult(row, promo)),
   };
+  logFinalFares("outbound", result.outbound);
 
   if (returnDate) {
     await ensureFlightsForRoute(destination, origin, returnDate);
@@ -117,6 +134,7 @@ flightsRouter.get("/search", async (req, res) => {
     ]);
     console.log(`[flights/search] return query returned ${returnRows.length} row(s)`);
     result.return = returnRows.map((row) => toFlightResult(row, promo));
+    logFinalFares("return", result.return);
   }
 
   res.json(result);

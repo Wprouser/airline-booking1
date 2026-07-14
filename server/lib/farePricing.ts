@@ -2,6 +2,32 @@ import type { Pool, PoolClient } from "pg";
 import { pool } from "../db/pool.js";
 import type { TravelClass } from "./fareSynthesis.js";
 
+// ---------------------------------------------------------------------------------------------
+// FARE ACCURACY vs. MakeMyTrip / real OTAs — root cause and why it can't be closed
+// ---------------------------------------------------------------------------------------------
+// This app's flight *schedules* (airline, flight number, times, aircraft) come from a real API,
+// AeroDataBox (see aerodatabox.ts) — but that API has no fare/pricing data on any endpoint or
+// plan (verified against a live response). No flight-data provider we have access to does:
+// Amadeus Self-Service (the one common option that returns real fares) is being decommissioned —
+// new registrations were already paused and the portal fully shuts down 2026-07-17, so it was
+// ruled out earlier. Every other candidate checked (Kiwi/Tequila, Travelpayouts/Aviasales, Duffel,
+// Skyscanner) either requires a paid/high-traffic commercial partnership for real pricing, or only
+// offers sandbox/cached/scraped data that is no more authoritative than what we compute here.
+//
+// So every fare in this app is *entirely* computed locally, below — never read from an API,
+// because no available API supplies one. This is architecturally why it cannot match MakeMyTrip:
+// MakeMyTrip prices come from direct GDS/NDC contracts with airlines reflecting real-time
+// yield-managed inventory (fares that move by the minute based on demand, booking curve, and
+// contracted fare rules per seat class) — that live inventory access is the commercial product
+// being licensed, not something a rules engine (or any free API) can reproduce. What *is*
+// verified correct here: the calculation itself (rule matching, seasonal/class multipliers,
+// taxes/fees, currency conversion, passenger-count discounts — see calculateFare below) has no
+// bugs found on audit, and nothing overrides or discards a provider-supplied price, because there
+// isn't one to override. If real fares are ever required, the only paths are (a) a paid GDS/NDC
+// or aggregator contract, or (b) accepting a documented "estimated fare" disclaimer, which is the
+// approach taken here.
+// ---------------------------------------------------------------------------------------------
+
 // A flight's cached per-seat fare, plus a passenger-count discount applied live per search/
 // booking (see applyGroupDiscount below — flight_fares is a shared cached row, so it can't hold
 // a value that depends on how many passengers *this* search has).

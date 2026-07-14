@@ -140,10 +140,13 @@ export function AirportCombobox({
                     : "hover:bg-slate-50 dark:hover:bg-slate-800")
                 }
               >
-                <span className="font-medium text-slate-800 dark:text-slate-100">{a.city}</span>{" "}
-                <span className="text-slate-500 dark:text-slate-400">
-                  ({a.code}) · {a.country}
-                </span>
+                <div>
+                  <span className="font-medium text-slate-800 dark:text-slate-100">{a.city}</span>{" "}
+                  <span className="text-slate-500 dark:text-slate-400">
+                    ({a.code}) · {a.country}
+                  </span>
+                </div>
+                <div className="truncate text-xs text-slate-400 dark:text-slate-500">{a.name}</div>
               </li>
             ))
           )}
