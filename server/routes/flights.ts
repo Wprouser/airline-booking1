@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { pool, HttpError } from "../db/pool.js";
+import { ensureFlightsForRoute } from "../lib/flightSync.js";
 
 export const flightsRouter = Router();
 
@@ -25,7 +26,7 @@ const FLIGHT_SEARCH_SQL = `
   JOIN flight_fares ff ON ff.flight_id = f.id AND ff.travel_class = $4
   WHERE f.origin_code = $1
     AND f.destination_code = $2
-    AND f.departure_time::date = $3::date
+    AND f.departure_date_local = $3::date
     AND (ff.total_seats - ff.booked_seats) >= $5
   ORDER BY f.departure_time ASC
 `;
@@ -73,6 +74,12 @@ flightsRouter.get("/search", async (req, res) => {
     throw new HttpError(400, "passengers must be an integer between 1 and 9");
   }
 
+  console.log(
+    `[flights/search] request: origin=${origin} destination=${destination} departureDate=${departureDate} ` +
+      `returnDate=${returnDate ?? "-"} passengers=${passengerCount} travelClass=${travelClass}`,
+  );
+
+  await ensureFlightsForRoute(origin, destination, departureDate);
   const { rows: outboundRows } = await pool.query(FLIGHT_SEARCH_SQL, [
     origin,
     destination,
@@ -80,12 +87,14 @@ flightsRouter.get("/search", async (req, res) => {
     travelClass,
     passengerCount,
   ]);
+  console.log(`[flights/search] outbound query returned ${outboundRows.length} row(s)`);
 
   const result: { outbound: unknown[]; return?: unknown[] } = {
     outbound: outboundRows.map(toFlightResult),
   };
 
   if (returnDate) {
+    await ensureFlightsForRoute(destination, origin, returnDate);
     const { rows: returnRows } = await pool.query(FLIGHT_SEARCH_SQL, [
       destination,
       origin,
@@ -93,6 +102,7 @@ flightsRouter.get("/search", async (req, res) => {
       travelClass,
       passengerCount,
     ]);
+    console.log(`[flights/search] return query returned ${returnRows.length} row(s)`);
     result.return = returnRows.map(toFlightResult);
   }
 

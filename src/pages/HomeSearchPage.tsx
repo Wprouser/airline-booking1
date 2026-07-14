@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearchStore } from "../store/searchStore";
 import { useBookingDraftStore } from "../store/bookingDraftStore";
+import { AirportCombobox } from "../components/AirportCombobox";
 import type { TravelClass } from "../types";
 import { TRAVEL_CLASS_LABELS } from "../types";
 
@@ -66,7 +67,7 @@ export function HomeSearchPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <h1 className="mb-1 text-2xl font-bold text-slate-900">Search Flights</h1>
-      <p className="mb-6 text-sm text-slate-500">Search real-time-style availability across our demo route network.</p>
+      <p className="mb-6 text-sm text-slate-500">Search real airports worldwide for live flight schedules.</p>
 
       <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex gap-4 text-sm font-medium">
@@ -79,38 +80,20 @@ export function HomeSearchPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-600">Source Airport</label>
-            <select
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              required
-            >
-              <option value="">Select origin</option>
-              {airports.map((a) => (
-                <option key={a.code} value={a.code}>
-                  {a.city} ({a.code})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-600">Destination Airport</label>
-            <select
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              required
-            >
-              <option value="">Select destination</option>
-              {airports.map((a) => (
-                <option key={a.code} value={a.code}>
-                  {a.city} ({a.code})
-                </option>
-              ))}
-            </select>
-          </div>
+          <AirportCombobox
+            airports={airports}
+            value={origin}
+            onChange={setOrigin}
+            label="Source Airport"
+            placeholder="Search by city, code, or airport name"
+          />
+          <AirportCombobox
+            airports={airports}
+            value={destination}
+            onChange={setDestination}
+            label="Destination Airport"
+            placeholder="Search by city, code, or airport name"
+          />
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-600">Departure Date</label>
             <input

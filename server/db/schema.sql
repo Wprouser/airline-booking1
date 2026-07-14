@@ -24,11 +24,42 @@ CREATE TABLE IF NOT EXISTS flights (
   arrival_time TIMESTAMPTZ NOT NULL,
   duration_minutes INTEGER NOT NULL,
   stops INTEGER NOT NULL DEFAULT 0,
-  aircraft TEXT NOT NULL
+  aircraft TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'simulated' CHECK (source IN ('live', 'simulated')),
+  -- The origin airport's LOCAL calendar date of departure. Search filters on this, not on
+  -- departure_time::date: casting a TIMESTAMPTZ to a date uses the query's timezone (UTC here),
+  -- which silently shifts to the previous day for early-morning local departures at any airport
+  -- east of UTC (e.g. a 05:20 IST departure from Kolkata is 23:50 UTC the day before) — that
+  -- mismatch was making real matching flights disappear from search results entirely.
+  departure_date_local DATE
 );
 
 CREATE INDEX IF NOT EXISTS idx_flights_route_date
   ON flights (origin_code, destination_code, departure_time);
+
+-- Tables already existed pre-these-columns on deployed databases; CREATE TABLE IF NOT EXISTS
+-- above is a no-op there, so they have to be added explicitly — and before any index referencing
+-- them below, since on a fresh DB the CREATE TABLE hasn't necessarily created these columns either
+-- (they're only in the literal CREATE TABLE body above for readability on a fresh install).
+ALTER TABLE flights ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'simulated';
+ALTER TABLE flights ADD COLUMN IF NOT EXISTS departure_date_local DATE;
+-- Backfill pre-existing rows with the best available approximation (UTC date). Any row this
+-- guesses wrong for will self-correct next time its route+date cache expires and gets re-synced.
+UPDATE flights SET departure_date_local = departure_time::date WHERE departure_date_local IS NULL;
+ALTER TABLE flights ALTER COLUMN departure_date_local SET NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_flights_route_local_date
+  ON flights (origin_code, destination_code, departure_date_local);
+
+-- Tracks the last time a given route+date was synced from the live flight-schedule API, so a
+-- popular route doesn't get re-fetched (and re-billed against the free quota) on every search.
+CREATE TABLE IF NOT EXISTS route_cache (
+  origin_code TEXT NOT NULL,
+  destination_code TEXT NOT NULL,
+  search_date DATE NOT NULL,
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (origin_code, destination_code, search_date)
+);
 
 -- Per-class fare + capacity. This is the "capacity-based slot" counter (Pattern B):
 -- checked/decremented under SELECT ... FOR UPDATE so concurrent bookings can't oversell a class.

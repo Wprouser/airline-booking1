@@ -21,3 +21,5 @@ services:
         generateValue: true
       # BETTER_AUTH_URL intentionally omitted — server/auth.ts falls back to Render's
       # auto-provided RENDER_EXTERNAL_URL.
+      - key: AERODATABOX_RAPIDAPI_KEY
+        sync: false # optional — set manually in the Render dashboard; unset means simulated-flight fallback
