@@ -170,7 +170,7 @@ export function PaymentPage() {
 
           <Button type="submit" size="lg" loading={submitting} className="w-full">
             {!submitting && <Lock className="h-4 w-4" />}
-            {submitting ? "Processing payment…" : `Pay ${formatMoney(grandTotal())}`}
+            {submitting ? "Processing payment…" : `Pay ${formatMoney(grandTotal(), outboundFlight.fare.currency)}`}
           </Button>
         </form>
       </Card>

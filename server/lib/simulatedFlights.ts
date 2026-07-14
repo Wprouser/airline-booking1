@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { randomUUID } from "node:crypto";
 import { synthesizeFaresAndSeats } from "./fareSynthesis.js";
+import { FarePricingCache } from "./farePricing.js";
 
 const AIRLINES = [
   { code: "SW", name: "SkyWays" },
@@ -34,6 +35,7 @@ export async function generateSimulatedFlights(
 
   const flightCount = Math.random() < 0.5 ? 2 : 3;
   const hours = [...DEPARTURE_HOURS].sort(() => Math.random() - 0.5).slice(0, flightCount);
+  const pricingCache = new FarePricingCache();
 
   for (const hour of hours) {
     const airline = rand(AIRLINES);
@@ -65,6 +67,12 @@ export async function generateSimulatedFlights(
       ],
     );
 
-    await synthesizeFaresAndSeats(client, id, durationMinutes);
+    await synthesizeFaresAndSeats(
+      client,
+      id,
+      durationMinutes,
+      { originCode: origin, destinationCode: destination, airlineCode: airline.code, departureDateLocal: dateKey },
+      pricingCache,
+    );
   }
 }

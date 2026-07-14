@@ -83,7 +83,7 @@ export function ConfirmationPage() {
           </div>
         ))}
         <div className="mt-3 border-t border-slate-100 pt-3 text-lg font-bold text-slate-800 dark:border-slate-800 dark:text-white">
-          Total Paid: {formatMoney(booking.totalAmount)}
+          Total Paid: {formatMoney(booking.totalAmount, booking.legs[0]?.currency ?? "USD")}
         </div>
       </Card>
 

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool, HttpError } from "../db/pool.js";
 import { ensureFlightsForRoute } from "../lib/flightSync.js";
+import { applyPromoToBreakdown, findGroupPromotion, type FareBreakdown, type GroupPromotion } from "../lib/farePricing.js";
 
 export const flightsRouter = Router();
 
@@ -20,7 +21,7 @@ const FLIGHT_SEARCH_SQL = `
     f.id, f.flight_number, f.origin_code, f.destination_code,
     f.departure_time, f.arrival_time, f.duration_minutes, f.stops, f.aircraft,
     al.code AS airline_code, al.name AS airline_name,
-    ff.price, ff.total_seats, ff.booked_seats
+    ff.price, ff.total_seats, ff.booked_seats, ff.currency_code, ff.breakdown
   FROM flights f
   JOIN airlines al ON al.code = f.airline_code
   JOIN flight_fares ff ON ff.flight_id = f.id AND ff.travel_class = $4
@@ -31,7 +32,11 @@ const FLIGHT_SEARCH_SQL = `
   ORDER BY f.departure_time ASC
 `;
 
-function toFlightResult(row: Record<string, unknown>) {
+// `ff.breakdown` is the cached per-seat breakdown from calculateFare (Layer 1); `promo` is this
+// request's live passenger-count discount (Layer 2, looked up once — see the /search handler).
+function toFlightResult(row: Record<string, unknown>, promo: GroupPromotion | null) {
+  const cached = row.breakdown as FareBreakdown;
+  const breakdown = applyPromoToBreakdown(cached, promo);
   return {
     id: row.id,
     flightNumber: row.flight_number,
@@ -45,8 +50,11 @@ function toFlightResult(row: Record<string, unknown>) {
     stops: row.stops,
     aircraft: row.aircraft,
     fare: {
-      price: row.price,
+      price: breakdown.total,
       availableSeats: (row.total_seats as number) - (row.booked_seats as number),
+      currency: row.currency_code,
+      taxLabel: breakdown.taxLabel,
+      breakdown,
     },
   };
 }
@@ -79,6 +87,11 @@ flightsRouter.get("/search", async (req, res) => {
       `returnDate=${returnDate ?? "-"} passengers=${passengerCount} travelClass=${travelClass}`,
   );
 
+  // Looked up once and reused for every row below (outbound + return both share the same
+  // passenger count/class) — this is the "recalculates when passenger count changes" behavior,
+  // applied live on top of each flight's already-cached Layer 1 breakdown.
+  const promo = await findGroupPromotion(pool, passengerCount, travelClass);
+
   await ensureFlightsForRoute(origin, destination, departureDate);
   const { rows: outboundRows } = await pool.query(FLIGHT_SEARCH_SQL, [
     origin,
@@ -90,7 +103,7 @@ flightsRouter.get("/search", async (req, res) => {
   console.log(`[flights/search] outbound query returned ${outboundRows.length} row(s)`);
 
   const result: { outbound: unknown[]; return?: unknown[] } = {
-    outbound: outboundRows.map(toFlightResult),
+    outbound: outboundRows.map((row) => toFlightResult(row, promo)),
   };
 
   if (returnDate) {
@@ -103,7 +116,7 @@ flightsRouter.get("/search", async (req, res) => {
       passengerCount,
     ]);
     console.log(`[flights/search] return query returned ${returnRows.length} row(s)`);
-    result.return = returnRows.map(toFlightResult);
+    result.return = returnRows.map((row) => toFlightResult(row, promo));
   }
 
   res.json(result);
@@ -120,7 +133,7 @@ flightsRouter.get("/:id", async (req, res) => {
   if (!flight) throw new HttpError(404, "Flight not found");
 
   const { rows: fares } = await pool.query(
-    "SELECT travel_class, price, total_seats, booked_seats FROM flight_fares WHERE flight_id = $1",
+    "SELECT travel_class, price, total_seats, booked_seats, currency_code, breakdown FROM flight_fares WHERE flight_id = $1",
     [req.params.id],
   );
 
@@ -140,6 +153,9 @@ flightsRouter.get("/:id", async (req, res) => {
       travelClass: f.travel_class,
       price: f.price,
       availableSeats: f.total_seats - f.booked_seats,
+      currency: f.currency_code,
+      taxLabel: (f.breakdown as FareBreakdown | null)?.taxLabel,
+      breakdown: f.breakdown,
     })),
   });
 });

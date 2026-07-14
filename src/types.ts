@@ -14,6 +14,20 @@ export interface Airport {
   country: string;
 }
 
+export interface FareBreakdown {
+  currency: string;
+  taxLabel: string;
+  baseFare: number;
+  airportTax: number;
+  fuelSurcharge: number;
+  serviceCharge: number;
+  convenienceFee: number;
+  discount: number;
+  gst: number;
+  total: number;
+  approxUsd: number;
+}
+
 export interface FlightResult {
   id: string;
   flightNumber: string;
@@ -26,7 +40,7 @@ export interface FlightResult {
   durationMinutes: number;
   stops: number;
   aircraft: string;
-  fare: { price: number; availableSeats: number };
+  fare: { price: number; availableSeats: number; currency: string; taxLabel: string; breakdown: FareBreakdown };
 }
 
 export interface SeatMapResponse {
@@ -81,6 +95,8 @@ export interface BookingLeg {
   departureTime: string;
   arrivalTime: string;
   farePrice: number;
+  currency: string;
+  breakdown: FareBreakdown | null;
 }
 
 export interface BookingPassenger {
@@ -129,4 +145,5 @@ export interface BookingSummary {
   firstLegDeparture: string;
   lastLegDeparture: string;
   passengerCount: number;
+  currency: string;
 }

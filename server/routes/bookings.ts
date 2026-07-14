@@ -3,6 +3,7 @@ import { Router } from "express";
 import { pool, withTransaction, HttpError } from "../db/pool.js";
 import { requireAuth } from "../auth.js";
 import { CANCELLATION_CUTOFF_HOURS } from "../config.js";
+import { applyGroupDiscount, type FareBreakdown } from "../lib/farePricing.js";
 
 export const bookingsRouter = Router();
 bookingsRouter.use(requireAuth);
@@ -192,6 +193,7 @@ function toBookingSummary(row: Record<string, unknown>) {
     firstLegDeparture: row.first_leg_departure,
     lastLegDeparture: row.last_leg_departure,
     passengerCount: Number(row.passenger_count),
+    currency: row.currency,
   };
 }
 
@@ -203,7 +205,8 @@ bookingsRouter.get("/mine", async (req, res) => {
        (SELECT destination_code FROM booking_legs WHERE booking_id = b.id ORDER BY departure_time ASC LIMIT 1) AS first_leg_destination,
        (SELECT departure_time FROM booking_legs WHERE booking_id = b.id ORDER BY departure_time ASC LIMIT 1) AS first_leg_departure,
        (SELECT departure_time FROM booking_legs WHERE booking_id = b.id ORDER BY departure_time DESC LIMIT 1) AS last_leg_departure,
-       (SELECT COUNT(*) FROM passengers WHERE booking_id = b.id) AS passenger_count
+       (SELECT COUNT(*) FROM passengers WHERE booking_id = b.id) AS passenger_count,
+       (SELECT currency_code FROM booking_legs WHERE booking_id = b.id ORDER BY departure_time ASC LIMIT 1) AS currency
      FROM bookings b
      WHERE b.user_id = $1
      ORDER BY b.created_at DESC`,
@@ -259,6 +262,8 @@ async function loadFullBooking(bookingId: string) {
       departureTime: l.departure_time,
       arrivalTime: l.arrival_time,
       farePrice: l.fare_price,
+      currency: l.currency_code,
+      breakdown: l.breakdown,
     })),
     passengers: passengers.map((p) => ({
       id: p.id,
@@ -306,10 +311,10 @@ bookingsRouter.post("/", async (req, res) => {
   }
 
   const pnr = await withTransaction(async (client) => {
-    const fareByLeg: { id: number; price: number }[] = [];
+    const fareByLeg: { id: number; price: number; currencyCode: string; breakdown: FareBreakdown }[] = [];
     for (const leg of body.legs) {
       const { rows } = await client.query(
-        "SELECT id, price, total_seats, booked_seats FROM flight_fares WHERE flight_id = $1 AND travel_class = $2 FOR UPDATE",
+        "SELECT id, price, total_seats, booked_seats, currency_code, breakdown FROM flight_fares WHERE flight_id = $1 AND travel_class = $2 FOR UPDATE",
         [leg.flightId, leg.travelClass],
       );
       const fare = rows[0];
@@ -317,7 +322,13 @@ bookingsRouter.post("/", async (req, res) => {
       if (fare.booked_seats + body.passengers.length > fare.total_seats) {
         throw new HttpError(409, `Not enough ${leg.travelClass} seats remaining on flight ${leg.flightId}`);
       }
-      fareByLeg.push({ id: fare.id, price: fare.price });
+      // Same passenger-count discount logic used to price this leg in search results — keeps the
+      // amount actually charged consistent with what was shown before payment.
+      const breakdown = await applyGroupDiscount(client, fare.breakdown as FareBreakdown, body.passengers.length, leg.travelClass);
+      if (breakdown.discount > 0) {
+        console.log(`[bookings] leg ${leg.flightId} (${leg.travelClass}): group discount ${breakdown.discount} applied, total ${breakdown.total}`);
+      }
+      fareByLeg.push({ id: fare.id, price: breakdown.total, currencyCode: fare.currency_code, breakdown });
     }
 
     // Claim each requested seat with a conditional UPDATE — the WHERE is_booked = false clause
@@ -384,8 +395,8 @@ bookingsRouter.post("/", async (req, res) => {
       if (!flight) throw new HttpError(404, `Flight ${leg.flightId} not found`);
       const { rows } = await client.query(
         `INSERT INTO booking_legs
-           (booking_id, flight_id, leg_type, travel_class, airline_name, flight_number, origin_code, destination_code, departure_time, arrival_time, fare_price)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+           (booking_id, flight_id, leg_type, travel_class, airline_name, flight_number, origin_code, destination_code, departure_time, arrival_time, fare_price, currency_code, breakdown)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
         [
           pnr,
           leg.flightId,
@@ -398,6 +409,8 @@ bookingsRouter.post("/", async (req, res) => {
           flight.departure_time,
           flight.arrival_time,
           fareByLeg[legIdx].price,
+          fareByLeg[legIdx].currencyCode,
+          JSON.stringify(fareByLeg[legIdx].breakdown),
         ],
       );
       legIds.push(rows[0].id);

@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
-import { SearchX } from "lucide-react";
+import { ChevronDown, SearchX } from "lucide-react";
 import { useBookingDraftStore } from "../store/bookingDraftStore";
 import { WizardSteps } from "../components/WizardSteps";
+import { FareBreakdownDetails } from "../components/FareBreakdownDetails";
 import { formatDateTime, formatDuration, formatMoney, stopsLabel } from "../utils/format";
 import { TRAVEL_CLASS_LABELS } from "../types";
 import { Card, CardTitle } from "../components/ui/Card";
@@ -38,6 +39,9 @@ export function BookingSummaryPage() {
     { legType: "outbound" as const, flight: outboundFlight },
     ...(returnFlight ? [{ legType: "return" as const, flight: returnFlight }] : []),
   ];
+  // Add-on prices aren't part of the dynamic fare engine (flat demo fees) — displayed in the
+  // flight's currency for consistent totals rather than converting them via exchange rates.
+  const currency = outboundFlight.fare.currency;
 
   return (
     <div className="mx-auto max-w-3xl animate-slide-up">
@@ -65,9 +69,18 @@ export function BookingSummaryPage() {
                 </div>
               </div>
               <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                {formatMoney(leg.flight.fare.price)}/pax
+                {formatMoney(leg.flight.fare.price, leg.flight.fare.currency)}/pax
               </div>
             </div>
+            <details className="group mt-2">
+              <summary className="flex w-fit cursor-pointer select-none list-none items-center gap-1 text-xs font-semibold text-brand-600 hover:underline dark:text-brand-400">
+                Fare details
+                <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="mt-2 max-w-sm">
+                <FareBreakdownDetails breakdown={leg.flight.fare.breakdown} />
+              </div>
+            </details>
           </div>
         ))}
       </Card>
@@ -89,7 +102,7 @@ export function BookingSummaryPage() {
             {p.specialMeal && <div className="text-slate-500 dark:text-slate-400">Meal request: {p.specialMeal}</div>}
             {p.addons.length > 0 && (
               <div className="text-slate-500 dark:text-slate-400">
-                Add-ons: {p.addons.map((a) => `${a.description} (${formatMoney(a.price)})`).join(", ")}
+                Add-ons: {p.addons.map((a) => `${a.description} (${formatMoney(a.price, currency)})`).join(", ")}
               </div>
             )}
           </div>
@@ -107,15 +120,15 @@ export function BookingSummaryPage() {
           <span>
             Fares ({passengers.length} passenger{passengers.length > 1 ? "s" : ""})
           </span>
-          <span>{formatMoney(legsTotal())}</span>
+          <span>{formatMoney(legsTotal(), currency)}</span>
         </div>
         <div className="flex justify-between text-sm text-slate-600 dark:text-slate-300">
           <span>Add-ons</span>
-          <span>{formatMoney(addonsTotal())}</span>
+          <span>{formatMoney(addonsTotal(), currency)}</span>
         </div>
         <div className="mt-2 flex justify-between border-t border-brand-200 pt-2 text-lg font-bold text-brand-800 dark:border-brand-800 dark:text-brand-300">
           <span>Total</span>
-          <span>{formatMoney(grandTotal())}</span>
+          <span>{formatMoney(grandTotal(), currency)}</span>
         </div>
       </Card>
 

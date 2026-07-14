@@ -29,12 +29,14 @@ function AddonOption({
   onChange,
   label,
   price,
+  currency,
 }: {
   name: string;
   checked: boolean;
   onChange: () => void;
   label: string;
   price: number;
+  currency: string;
 }) {
   return (
     <label
@@ -49,7 +51,9 @@ function AddonOption({
         <input type="radio" name={name} checked={checked} onChange={onChange} className="accent-brand-600" />
         {label}
       </span>
-      <span className="font-medium text-slate-500 dark:text-slate-400">{price > 0 ? formatMoney(price) : "Free"}</span>
+      <span className="font-medium text-slate-500 dark:text-slate-400">
+        {price > 0 ? formatMoney(price, currency) : "Free"}
+      </span>
     </label>
   );
 }
@@ -112,6 +116,7 @@ export function AdditionalServicesPage() {
                     name={`meal-${i}`}
                     label={m.description}
                     price={m.price}
+                    currency={outboundFlight.fare.currency}
                     checked={selections[i].meal === m.description}
                     onChange={() => setSelections((s) => s.map((x, xi) => (xi === i ? { ...x, meal: m.description } : x)))}
                   />
@@ -130,6 +135,7 @@ export function AdditionalServicesPage() {
                     name={`baggage-${i}`}
                     label={b.description}
                     price={b.price}
+                    currency={outboundFlight.fare.currency}
                     checked={selections[i].baggage === b.description}
                     onChange={() =>
                       setSelections((s) => s.map((x, xi) => (xi === i ? { ...x, baggage: b.description } : x)))

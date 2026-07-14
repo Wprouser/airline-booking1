@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "start": "tsx server/index.ts",
     "seed": "tsx server/db/seed.ts",
+    "seed:pricing": "tsx server/db/seedPricing.ts",
     "auth:migrate": "tsx server/db/migrate-auth.ts",
     "db:migrate": "tsx server/db/migrate.ts",
     "lint": "eslint ."

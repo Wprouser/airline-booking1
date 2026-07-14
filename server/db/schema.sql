@@ -12,6 +12,85 @@ CREATE TABLE IF NOT EXISTS airlines (
   name TEXT NOT NULL
 );
 
+-- ---------------------------------------------------------------------------------------------
+-- Dynamic fare pricing engine — everything a fare is computed from lives here, not in code.
+-- See server/lib/farePricing.ts. Seeded by server/db/seedPricing.ts (idempotent, separate from
+-- the destructive airports/flights reseed in server/db/seed.ts so re-running the flight seed
+-- never wipes pricing configuration).
+-- ---------------------------------------------------------------------------------------------
+
+-- Real-world currency + regional tax label per country (matches airports.country exactly). This
+-- is what makes *every* country automatically get its correct currency/tax label — fare_rules
+-- amounts are denominated in whatever currency the rule specifies, then calculateFare() converts
+-- the final breakdown into the traveller's country's real currency via exchange_rates, rather
+-- than requiring a bespoke fare_rules row per country.
+CREATE TABLE IF NOT EXISTS countries (
+  country TEXT PRIMARY KEY,
+  currency_code TEXT NOT NULL,
+  tax_label TEXT NOT NULL DEFAULT 'VAT'
+);
+
+-- Units of currency_code per 1 USD. Static/seeded, not live-fetched — "configurable" means a DB
+-- row an operator can update, not a hardcoded constant in application code.
+CREATE TABLE IF NOT EXISTS exchange_rates (
+  currency_code TEXT PRIMARY KEY,
+  rate_to_usd NUMERIC(14, 6) NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- The rule engine. Each nullable dimension (origin/destination country, airline, travel class)
+-- acts as a wildcard when NULL. calculateFare() picks the most specific active match.
+CREATE TABLE IF NOT EXISTS fare_rules (
+  id SERIAL PRIMARY KEY,
+  rule_type TEXT NOT NULL CHECK (rule_type IN ('domestic', 'international')),
+  origin_country TEXT,
+  destination_country TEXT,
+  airline_code TEXT REFERENCES airlines(code),
+  travel_class TEXT CHECK (travel_class IN ('economy', 'premium_economy', 'business', 'first')),
+  currency_code TEXT NOT NULL DEFAULT 'USD',
+  base_fare_flat NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  -- Duration is the existing distance proxy — every flight already has duration_minutes, so this
+  -- avoids needing airport lat/long just for a per-km fare component.
+  base_fare_per_minute NUMERIC(10, 4) NOT NULL DEFAULT 0,
+  airport_tax_flat NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  fuel_surcharge_percent NUMERIC(6, 4) NOT NULL DEFAULT 0,
+  service_charge_flat NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  convenience_fee_flat NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  gst_percent NUMERIC(6, 4) NOT NULL DEFAULT 0,
+  priority INT NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fare_rules_lookup ON fare_rules (rule_type, active);
+
+-- Recurring yearly date-range multipliers. One mechanism covers both "seasonal" (e.g. summer)
+-- and "peak/off-peak" (multiplier > 1 = surcharge, < 1 = discount) pricing.
+CREATE TABLE IF NOT EXISTS season_pricing_rules (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  start_month INT NOT NULL CHECK (start_month BETWEEN 1 AND 12),
+  start_day INT NOT NULL CHECK (start_day BETWEEN 1 AND 31),
+  end_month INT NOT NULL CHECK (end_month BETWEEN 1 AND 12),
+  end_day INT NOT NULL CHECK (end_day BETWEEN 1 AND 31),
+  multiplier NUMERIC(6, 4) NOT NULL DEFAULT 1,
+  active BOOLEAN NOT NULL DEFAULT true
+);
+
+-- Automatic promotional discounts (no promo-code entry field exists in the UI, so these apply
+-- automatically when eligible — e.g. group/passenger-count discounts).
+CREATE TABLE IF NOT EXISTS promotions (
+  id SERIAL PRIMARY KEY,
+  description TEXT NOT NULL,
+  discount_type TEXT NOT NULL CHECK (discount_type IN ('percent', 'flat')),
+  discount_value NUMERIC(10, 4) NOT NULL,
+  min_passengers INT NOT NULL DEFAULT 1,
+  travel_class TEXT CHECK (travel_class IN ('economy', 'premium_economy', 'business', 'first')),
+  starts_at TIMESTAMPTZ,
+  ends_at TIMESTAMPTZ,
+  active BOOLEAN NOT NULL DEFAULT true
+);
+
 -- Flight inventory
 
 CREATE TABLE IF NOT EXISTS flights (
@@ -70,8 +149,16 @@ CREATE TABLE IF NOT EXISTS flight_fares (
   price NUMERIC(10, 2) NOT NULL,
   total_seats INTEGER NOT NULL,
   booked_seats INTEGER NOT NULL DEFAULT 0 CHECK (booked_seats <= total_seats),
+  -- currency_code/breakdown are the dynamic-pricing-engine snapshot (see farePricing.ts). `price`
+  -- keeps its exact original meaning/type — it's just computed by the rule engine now instead of
+  -- a hardcoded formula, so every existing reader (bookings.ts's SELECT ... FOR UPDATE included)
+  -- needs zero changes.
+  currency_code TEXT NOT NULL DEFAULT 'USD',
+  breakdown JSONB,
   UNIQUE (flight_id, travel_class)
 );
+ALTER TABLE flight_fares ADD COLUMN IF NOT EXISTS currency_code TEXT NOT NULL DEFAULT 'USD';
+ALTER TABLE flight_fares ADD COLUMN IF NOT EXISTS breakdown JSONB;
 
 -- Individual seat map. UNIQUE(flight_id, seat_number) + a conditional UPDATE ... WHERE
 -- is_booked = false is the exclusivity mechanism (Pattern A) for a specific seat, layered on
@@ -119,8 +206,14 @@ CREATE TABLE IF NOT EXISTS booking_legs (
   destination_code TEXT NOT NULL,
   departure_time TIMESTAMPTZ NOT NULL,
   arrival_time TIMESTAMPTZ NOT NULL,
-  fare_price NUMERIC(10, 2) NOT NULL
+  fare_price NUMERIC(10, 2) NOT NULL,
+  -- Snapshot of the fare breakdown actually charged (post group-discount), same rationale as the
+  -- other snapshotted columns above: a later pricing-rule change must never alter a past booking.
+  currency_code TEXT NOT NULL DEFAULT 'USD',
+  breakdown JSONB
 );
+ALTER TABLE booking_legs ADD COLUMN IF NOT EXISTS currency_code TEXT NOT NULL DEFAULT 'USD';
+ALTER TABLE booking_legs ADD COLUMN IF NOT EXISTS breakdown JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_booking_legs_booking ON booking_legs (booking_id);
 

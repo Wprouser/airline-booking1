@@ -3,6 +3,7 @@ import { AERODATABOX_RAPIDAPI_KEY } from "../config.js";
 import { fetchLiveFlightsForRoute, type LiveFlightLeg } from "./aerodatabox.js";
 import { generateSimulatedFlights } from "./simulatedFlights.js";
 import { synthesizeFaresAndSeats } from "./fareSynthesis.js";
+import { FarePricingCache } from "./farePricing.js";
 
 const CACHE_TTL_HOURS = 12;
 
@@ -36,7 +37,7 @@ async function markCached(origin: string, destination: string, dateKey: string):
   );
 }
 
-async function upsertLiveFlight(leg: LiveFlightLeg, dateKey: string): Promise<void> {
+async function upsertLiveFlight(leg: LiveFlightLeg, dateKey: string, pricingCache: FarePricingCache): Promise<void> {
   const id = `${leg.flightNumber}-${leg.originCode}${leg.destinationCode}-${dateKey}`;
 
   await withTransaction(async (client) => {
@@ -67,7 +68,18 @@ async function upsertLiveFlight(leg: LiveFlightLeg, dateKey: string): Promise<vo
       ],
     );
 
-    await synthesizeFaresAndSeats(client, id, durationMinutes);
+    await synthesizeFaresAndSeats(
+      client,
+      id,
+      durationMinutes,
+      {
+        originCode: leg.originCode,
+        destinationCode: leg.destinationCode,
+        airlineCode: leg.airlineCode,
+        departureDateLocal: leg.departureDateLocal,
+      },
+      pricingCache,
+    );
   });
 }
 
@@ -92,9 +104,14 @@ export async function ensureFlightsForRoute(origin: string, destination: string,
 
   try {
     const legs = await fetchLiveFlightsForRoute(AERODATABOX_RAPIDAPI_KEY, origin, destination, dateKey);
-    for (const leg of legs) {
-      await upsertLiveFlight(leg, dateKey);
-    }
+    // One cache per route+date sync — every leg here shares the same route/date, so country
+    // resolution, season multiplier, and exchange rates only need to be looked up once. Each leg
+    // upserts in its own transaction/connection, so running them concurrently (rather than one at
+    // a time) is safe and is what makes a busy real route (e.g. 25+ matched flights) sync in a
+    // few seconds instead of tens of seconds against a remote DB — the pool (default 10
+    // connections) interleaves them instead of paying every round-trip's latency serially.
+    const pricingCache = new FarePricingCache();
+    await Promise.all(legs.map((leg) => upsertLiveFlight(leg, dateKey, pricingCache)));
     console.log(`[flightSync] ${routeLabel}: synced ${legs.length} live flight(s)`);
     await markCached(origin, destination, dateKey);
   } catch (err) {

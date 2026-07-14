@@ -43,7 +43,9 @@ function BookingRow({ booking, showCancel }: { booking: BookingSummary; showCanc
           <div className="text-xs text-slate-400 dark:text-slate-500">{formatDateTime(booking.firstLegDeparture)}</div>
         </div>
         <div className="text-right">
-          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{formatMoney(booking.totalAmount)}</div>
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            {formatMoney(booking.totalAmount, booking.currency)}
+          </div>
           <div className="text-xs text-slate-400 dark:text-slate-500">{booking.passengerCount} passenger(s)</div>
           <Badge variant={booking.status === "confirmed" ? "success" : "neutral"} className="mt-1">
             {booking.status}
