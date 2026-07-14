@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { SearchX, UserCircle2 } from "lucide-react";
 import { useBookingDraftStore } from "../store/bookingDraftStore";
 import { WizardSteps } from "../components/WizardSteps";
+import { Card, CardTitle } from "../components/ui/Card";
+import { FormField } from "../components/ui/FormField";
+import { Input } from "../components/ui/Input";
+import { Select } from "../components/ui/Select";
+import { Button } from "../components/ui/Button";
+import { Alert } from "../components/ui/Alert";
+import { EmptyState } from "../components/ui/EmptyState";
 
 const SEAT_PREFERENCES = ["No preference", "Window", "Aisle", "Middle"];
 const MEAL_OPTIONS = ["None", "Vegetarian", "Vegan", "Halal", "Kosher", "Gluten-Free", "Diabetic"];
@@ -20,11 +28,12 @@ export function PassengerDetailsPage() {
 
   if (!outboundFlight) {
     return (
-      <div className="mx-auto max-w-2xl text-center text-slate-500">
-        <p>No flights selected yet.</p>
-        <button onClick={() => navigate("/")} className="mt-3 text-brand-600 underline">
-          Start a new search
-        </button>
+      <div className="mx-auto max-w-2xl animate-fade-in">
+        <EmptyState
+          icon={SearchX}
+          title="No flights selected yet"
+          action={<Button onClick={() => navigate("/")}>Start a new search</Button>}
+        />
       </div>
     );
   }
@@ -50,140 +59,116 @@ export function PassengerDetailsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-3xl animate-slide-up">
       <WizardSteps current={3} />
-      <h1 className="mb-4 text-2xl font-bold text-slate-900">Passenger Details</h1>
+      <h1 className="mb-4 text-2xl font-bold text-slate-900 dark:text-white">Passenger Details</h1>
 
-      <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Contact Information</h2>
+      <Card className="mb-6">
+        <CardTitle>Contact Information</CardTitle>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-600">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-600">Phone</label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              required
-            />
-          </div>
+          <FormField label="Email" required>
+            {(id) => <Input id={id} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />}
+          </FormField>
+          <FormField label="Phone" required>
+            {(id) => <Input id={id} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />}
+          </FormField>
         </div>
-      </div>
+      </Card>
 
       {passengers.map((p, i) => (
-        <div key={i} className="mb-6 rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Passenger {i + 1}</h2>
+        <Card key={i} className="mb-6">
+          <CardTitle className="flex items-center gap-1.5">
+            <UserCircle2 className="h-4 w-4 text-brand-500" aria-hidden="true" />
+            Passenger {i + 1}
+          </CardTitle>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">First Name</label>
-              <input
-                value={p.firstName}
-                onChange={(e) => updatePassenger(i, { firstName: e.target.value })}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">Last Name</label>
-              <input
-                value={p.lastName}
-                onChange={(e) => updatePassenger(i, { lastName: e.target.value })}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                required
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">Date of Birth</label>
-              <input
-                type="date"
-                value={p.dateOfBirth}
-                onChange={(e) => updatePassenger(i, { dateOfBirth: e.target.value })}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">Gender</label>
-              <select
-                value={p.gender}
-                onChange={(e) => updatePassenger(i, { gender: e.target.value })}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              >
-                <option value="">Prefer not to say</option>
-                <option value="female">Female</option>
-                <option value="male">Male</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Passport / Government ID <span className="text-slate-400">(optional)</span>
-              </label>
-              <input
-                value={p.passportNumber}
-                onChange={(e) => updatePassenger(i, { passportNumber: e.target.value })}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">
-                Nationality <span className="text-slate-400">(optional)</span>
-              </label>
-              <input
-                value={p.nationality}
-                onChange={(e) => updatePassenger(i, { nationality: e.target.value })}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">Special Meal Request</label>
-              <select
-                value={p.specialMeal}
-                onChange={(e) => updatePassenger(i, { specialMeal: e.target.value })}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              >
-                {MEAL_OPTIONS.map((m) => (
-                  <option key={m} value={m === "None" ? "" : m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-600">Seat Preference</label>
-              <select
-                value={p.seatPreference}
-                onChange={(e) => updatePassenger(i, { seatPreference: e.target.value })}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              >
-                {SEAT_PREFERENCES.map((s) => (
-                  <option key={s} value={s === "No preference" ? "" : s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <FormField label="First Name" required>
+              {(id) => (
+                <Input id={id} value={p.firstName} onChange={(e) => updatePassenger(i, { firstName: e.target.value })} required />
+              )}
+            </FormField>
+            <FormField label="Last Name" required>
+              {(id) => (
+                <Input id={id} value={p.lastName} onChange={(e) => updatePassenger(i, { lastName: e.target.value })} required />
+              )}
+            </FormField>
+            <FormField label="Date of Birth">
+              {(id) => (
+                <Input
+                  id={id}
+                  type="date"
+                  value={p.dateOfBirth}
+                  onChange={(e) => updatePassenger(i, { dateOfBirth: e.target.value })}
+                />
+              )}
+            </FormField>
+            <FormField label="Gender">
+              {(id) => (
+                <Select id={id} value={p.gender} onChange={(e) => updatePassenger(i, { gender: e.target.value })}>
+                  <option value="">Prefer not to say</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="other">Other</option>
+                </Select>
+              )}
+            </FormField>
+            <FormField label="Passport / Government ID" hint="Optional">
+              {(id) => (
+                <Input
+                  id={id}
+                  value={p.passportNumber}
+                  onChange={(e) => updatePassenger(i, { passportNumber: e.target.value })}
+                />
+              )}
+            </FormField>
+            <FormField label="Nationality" hint="Optional">
+              {(id) => (
+                <Input id={id} value={p.nationality} onChange={(e) => updatePassenger(i, { nationality: e.target.value })} />
+              )}
+            </FormField>
+            <FormField label="Special Meal Request">
+              {(id) => (
+                <Select
+                  id={id}
+                  value={p.specialMeal}
+                  onChange={(e) => updatePassenger(i, { specialMeal: e.target.value })}
+                >
+                  {MEAL_OPTIONS.map((m) => (
+                    <option key={m} value={m === "None" ? "" : m}>
+                      {m}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </FormField>
+            <FormField label="Seat Preference">
+              {(id) => (
+                <Select
+                  id={id}
+                  value={p.seatPreference}
+                  onChange={(e) => updatePassenger(i, { seatPreference: e.target.value })}
+                >
+                  {SEAT_PREFERENCES.map((s) => (
+                    <option key={s} value={s === "No preference" ? "" : s}>
+                      {s}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </FormField>
           </div>
-        </div>
+        </Card>
       ))}
 
-      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+      {error && (
+        <div className="mb-4">
+          <Alert variant="error">{error}</Alert>
+        </div>
+      )}
 
-      <button
-        onClick={handleContinue}
-        className="w-full rounded-md bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
-      >
+      <Button onClick={handleContinue} size="lg" className="w-full">
         Continue to Seat Selection
-      </button>
+      </Button>
     </div>
   );
 }

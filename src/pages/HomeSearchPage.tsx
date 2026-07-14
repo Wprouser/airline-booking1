@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CalendarDays, Search, Users } from "lucide-react";
 import { useSearchStore } from "../store/searchStore";
 import { useBookingDraftStore } from "../store/bookingDraftStore";
 import { AirportCombobox } from "../components/AirportCombobox";
+import { Card } from "../components/ui/Card";
+import { Input } from "../components/ui/Input";
+import { Select } from "../components/ui/Select";
+import { FormField } from "../components/ui/FormField";
+import { Button } from "../components/ui/Button";
+import { Alert } from "../components/ui/Alert";
+import { cn } from "../lib/cn";
 import type { TravelClass } from "../types";
 import { TRAVEL_CLASS_LABELS } from "../types";
 
@@ -65,98 +73,137 @@ export function HomeSearchPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <h1 className="mb-1 text-2xl font-bold text-slate-900">Search Flights</h1>
-      <p className="mb-6 text-sm text-slate-500">Search real airports worldwide for live flight schedules.</p>
+    <div className="mx-auto max-w-3xl animate-slide-up">
+      <div className="mb-6 text-center sm:text-left">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">Search Flights</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          Search real airports worldwide for live flight schedules.
+        </p>
+      </div>
 
-      <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex gap-4 text-sm font-medium">
-          {(["round_trip", "one_way"] as const).map((t) => (
-            <label key={t} className="flex items-center gap-1.5">
-              <input type="radio" checked={tripType === t} onChange={() => setTripType(t)} />
-              {t === "round_trip" ? "Round trip" : "One way"}
-            </label>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <AirportCombobox
-            airports={airports}
-            value={origin}
-            onChange={setOrigin}
-            label="Source Airport"
-            placeholder="Search by city, code, or airport name"
-          />
-          <AirportCombobox
-            airports={airports}
-            value={destination}
-            onChange={setDestination}
-            label="Destination Airport"
-            placeholder="Search by city, code, or airport name"
-          />
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-600">Departure Date</label>
-            <input
-              type="date"
-              min={todayKey()}
-              value={departureDate}
-              onChange={(e) => setDepartureDate(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              required
-            />
+      <Card>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <div className="inline-flex w-fit rounded-lg bg-slate-100 p-1 text-sm font-semibold dark:bg-slate-800">
+            {(["round_trip", "one_way"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTripType(t)}
+                className={cn(
+                  "rounded-md px-4 py-1.5 transition-colors",
+                  tripType === t
+                    ? "bg-white text-brand-700 shadow-soft dark:bg-slate-700 dark:text-brand-300"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
+                )}
+              >
+                {t === "round_trip" ? "Round trip" : "One way"}
+              </button>
+            ))}
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-600">
-              Return Date {tripType === "one_way" && <span className="text-slate-400">(round trip only)</span>}
-            </label>
-            <input
-              type="date"
-              min={departureDate}
-              value={returnDate}
-              onChange={(e) => setReturnDate(e.target.value)}
-              disabled={tripType === "one_way"}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <AirportCombobox
+              airports={airports}
+              value={origin}
+              onChange={setOrigin}
+              label="Source Airport"
+              placeholder="Search by city, code, or airport name"
+            />
+            <AirportCombobox
+              airports={airports}
+              value={destination}
+              onChange={setDestination}
+              label="Destination Airport"
+              placeholder="Search by city, code, or airport name"
+            />
+
+            <FormField label="Departure Date" required>
+              {(id) => (
+                <div className="relative">
+                  <CalendarDays
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    id={id}
+                    type="date"
+                    min={todayKey()}
+                    value={departureDate}
+                    onChange={(e) => setDepartureDate(e.target.value)}
+                    className="pl-9"
+                    required
+                  />
+                </div>
+              )}
+            </FormField>
+
+            <FormField
+              label="Return Date"
+              hint={tripType === "one_way" ? "Round trip only" : undefined}
               required={tripType === "round_trip"}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-600">Number of Passengers</label>
-            <input
-              type="number"
-              min={1}
-              max={9}
-              value={passengers}
-              onChange={(e) => setPassengers(Math.min(9, Math.max(1, Number(e.target.value))))}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-600">Travel Class</label>
-            <select
-              value={travelClass}
-              onChange={(e) => setTravelClass(e.target.value as TravelClass)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             >
-              {Object.entries(TRAVEL_CLASS_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              {(id) => (
+                <div className="relative">
+                  <CalendarDays
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    id={id}
+                    type="date"
+                    min={departureDate}
+                    value={returnDate}
+                    onChange={(e) => setReturnDate(e.target.value)}
+                    disabled={tripType === "one_way"}
+                    className="pl-9"
+                    required={tripType === "round_trip"}
+                  />
+                </div>
+              )}
+            </FormField>
+
+            <FormField label="Number of Passengers" required>
+              {(id) => (
+                <div className="relative">
+                  <Users
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    id={id}
+                    type="number"
+                    min={1}
+                    max={9}
+                    value={passengers}
+                    onChange={(e) => setPassengers(Math.min(9, Math.max(1, Number(e.target.value))))}
+                    className="pl-9"
+                    required
+                  />
+                </div>
+              )}
+            </FormField>
+
+            <FormField label="Travel Class">
+              {(id) => (
+                <Select id={id} value={travelClass} onChange={(e) => setTravelClass(e.target.value as TravelClass)}>
+                  {Object.entries(TRAVEL_CLASS_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </FormField>
           </div>
-        </div>
 
-        {(formError || error) && <p className="mt-4 text-sm text-red-600">{formError ?? error}</p>}
+          {(formError || error) && <Alert variant="error">{formError ?? error}</Alert>}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="mt-6 w-full rounded-md bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-        >
-          {submitting ? "Searching…" : "Search Flights"}
-        </button>
-      </form>
+          <Button type="submit" size="lg" loading={submitting} className="w-full">
+            {!submitting && <Search className="h-4 w-4" />}
+            {submitting ? "Searching…" : "Search Flights"}
+          </Button>
+        </form>
+      </Card>
     </div>
   );
 }

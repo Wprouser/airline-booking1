@@ -16,9 +16,9 @@ import { BookingDetailPage } from "./pages/BookingDetailPage";
 
 function App() {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <Navbar />
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <Routes>
           <Route path="/" element={<HomeSearchPage />} />
           <Route path="/booking/select" element={<FlightSelectionPage />} />

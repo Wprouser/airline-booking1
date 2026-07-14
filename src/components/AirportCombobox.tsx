@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { MapPin } from "lucide-react";
 import type { Airport } from "../types";
+import { Input } from "./ui/Input";
 
 function airportLabel(a: Airport): string {
   return `${a.city} (${a.code})`;
@@ -24,6 +26,8 @@ export function AirportCombobox({
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputId = useId();
+  const listboxId = useId();
 
   const selected = airports.find((a) => a.code === value);
 
@@ -63,57 +67,81 @@ export function AirportCombobox({
 
   return (
     <div ref={containerRef} className="relative">
-      <label className="mb-1 block text-xs font-semibold text-slate-600">{label}</label>
-      <input
-        type="text"
-        value={open ? query : selected ? airportLabel(selected) : query}
-        onFocus={() => {
-          setOpen(true);
-          setQuery("");
-        }}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setHighlighted(0);
-          if (value) onChange("");
-        }}
-        onKeyDown={(e) => {
-          if (!open) return;
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setHighlighted((i) => Math.min(i + 1, results.length - 1));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setHighlighted((i) => Math.max(i - 1, 0));
-          } else if (e.key === "Enter") {
-            e.preventDefault();
-            const pick = results[highlighted];
-            if (pick) choose(pick);
-          } else if (e.key === "Escape") {
-            setOpen(false);
-          }
-        }}
-        placeholder={placeholder}
-        autoComplete="off"
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-      />
+      <label htmlFor={inputId} className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">
+        {label}
+      </label>
+      <div className="relative">
+        <MapPin
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+          aria-hidden="true"
+        />
+        <Input
+          id={inputId}
+          type="text"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          value={open ? query : selected ? airportLabel(selected) : query}
+          onFocus={() => {
+            setOpen(true);
+            setQuery("");
+          }}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setHighlighted(0);
+            if (value) onChange("");
+          }}
+          onKeyDown={(e) => {
+            if (!open) return;
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setHighlighted((i) => Math.min(i + 1, results.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setHighlighted((i) => Math.max(i - 1, 0));
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              const pick = results[highlighted];
+              if (pick) choose(pick);
+            } else if (e.key === "Escape") {
+              setOpen(false);
+            }
+          }}
+          placeholder={placeholder}
+          autoComplete="off"
+          className="pl-9"
+        />
+      </div>
       {/* Hidden input keeps the picked code participating in native form validation/required checks. */}
       <input type="text" value={value} readOnly required tabIndex={-1} className="sr-only" aria-hidden="true" />
       {open && (
-        <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-slate-200 bg-white text-sm shadow-lg">
+        <ul
+          id={listboxId}
+          role="listbox"
+          className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white text-sm shadow-elevated dark:border-slate-700 dark:bg-slate-900"
+        >
           {results.length === 0 ? (
-            <li className="px-3 py-2 text-slate-400">No airports match.</li>
+            <li className="px-3 py-2 text-slate-400 dark:text-slate-500">No airports match.</li>
           ) : (
             results.map((a, i) => (
               <li
                 key={a.code}
+                role="option"
+                aria-selected={i === highlighted}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   choose(a);
                 }}
-                className={`cursor-pointer px-3 py-2 ${i === highlighted ? "bg-brand-50 text-brand-700" : "hover:bg-slate-50"}`}
+                className={
+                  "cursor-pointer px-3 py-2 " +
+                  (i === highlighted
+                    ? "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300"
+                    : "hover:bg-slate-50 dark:hover:bg-slate-800")
+                }
               >
-                <span className="font-medium">{a.city}</span>{" "}
-                <span className="text-slate-500">
+                <span className="font-medium text-slate-800 dark:text-slate-100">{a.city}</span>{" "}
+                <span className="text-slate-500 dark:text-slate-400">
                   ({a.code}) · {a.country}
                 </span>
               </li>
