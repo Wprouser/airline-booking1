@@ -36,8 +36,15 @@ const FLIGHT_SEARCH_SQL = `
 
 // `ff.breakdown` is the cached per-seat breakdown from calculateFare (Layer 1); `promo` is this
 // request's live passenger-count discount (Layer 2, looked up once — see the /search handler).
+// Returns null (never throws) for a row with no cached breakdown — legacy flight_fares rows
+// written before this JSONB column existed (backfilled once in bulk, but a one-bad-row defense
+// is cheap insurance) must not take down the whole search response; the caller filters nulls out.
 function toFlightResult(row: Record<string, unknown>, promo: GroupPromotion | null) {
-  const cached = row.breakdown as FareBreakdown;
+  const cached = row.breakdown as FareBreakdown | null;
+  if (!cached) {
+    console.warn(`[flights/search] flight ${row.id} has no cached fare breakdown — omitting from results`);
+    return null;
+  }
   const breakdown = applyPromoToBreakdown(cached, promo);
   return {
     id: row.id,
@@ -121,7 +128,7 @@ flightsRouter.get("/search", async (req, res) => {
   console.log(`[flights/search] outbound query returned ${outboundRows.length} row(s)`);
 
   const result: { outbound: unknown[]; return?: unknown[] } = {
-    outbound: outboundRows.map((row) => toFlightResult(row, promo)),
+    outbound: outboundRows.map((row) => toFlightResult(row, promo)).filter((f) => f !== null),
   };
   logFinalFares("outbound", result.outbound);
 
@@ -135,7 +142,7 @@ flightsRouter.get("/search", async (req, res) => {
       passengerCount,
     ]);
     console.log(`[flights/search] return query returned ${returnRows.length} row(s)`);
-    result.return = returnRows.map((row) => toFlightResult(row, promo));
+    result.return = returnRows.map((row) => toFlightResult(row, promo)).filter((f) => f !== null);
     logFinalFares("return", result.return);
   }
 
